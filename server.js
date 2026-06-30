@@ -3,16 +3,16 @@ if (typeof File === 'undefined') {
   global.File = require('buffer').File;
 }
 
-const express   = require('express');
-const multer    = require('multer');
-const path      = require('path');
-const https     = require('https');
-const http      = require('http');
-const OpenAI = require('openai');
+const express = require('express');
+const multer  = require('multer');
+const path    = require('path');
+const https   = require('https');
+const http    = require('http');
+const OpenAI  = require('openai');
 
-const PORT       = process.env.PORT            || 3001;
-const ADMIN_KEY  = process.env.ADMIN_KEY       || 'cardnews2024';
-const OPENAI_KEY = process.env.OPENAI_API_KEY  || '';
+const PORT       = process.env.PORT           || 3001;
+const ADMIN_KEY  = process.env.ADMIN_KEY      || 'cardnews2024';
+const OPENAI_KEY = process.env.OPENAI_API_KEY || '';
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -60,25 +60,50 @@ app.post('/api/generate', checkAdmin, async (req, res) => {
   const ACCENTS = ['#FF6B35','#00D4FF','#A78BFA','#34D399','#FBBF24','#F472B6','#60A5FA','#F87171','#2DD4BF'];
   const accentList = ACCENTS.slice(0, Number(cardCount)).join(', ');
 
-  const prompt = `당신은 대한민국 최고의 인스타그램 카드뉴스 크리에이터이자 심리 마케터입니다.
-Al Ries의 포지셔닝, Seth Godin의 마케팅 철학, Brendan Kane의 바이럴 공식을 완벽히 구현합니다.
+  const systemPrompt = `당신은 해당 분야 최고 전문가이자 팔로워 100만의 카드뉴스 크리에이터입니다.
 
-[입력 원문 — 영어일 경우 핵심을 한국어로 번역해 활용]
-${text.substring(0, 4500)}
+당신의 임무는 원문에서 "대부분의 사람이 모르는 진짜 인사이트"만 골라 카드뉴스로 만드는 것입니다.
 
-${topic ? `[추가 키워드/방향] ${topic}` : ''}
+[퀄리티 기준 — 반드시 지켜야 할 원칙]
 
-[제작 규칙]
-총 ${cardCount}장.
+1. 구체성 원칙
+   - 모든 카드에 수치, 공식, 구체적 방법 중 하나 이상 포함
+   - "중요하다", "도움이 된다", "필요하다" 같은 말은 금지
+   - 나쁜 예: "단백질 섭취가 근육 성장에 중요합니다"
+   - 좋은 예: "근육 유지엔 체중 1kg당 최소 1.6g 단백질 필요"
 
-카드 1 (훅): 독자가 스크롤을 멈추는 충격/호기심 문장. "99%가 모르는..." 형식 권장. headline 최대 18자.
-카드 2~${Number(cardCount)-1} (핵심): 카드당 하나의 강력한 인사이트. 숫자/사례 우선. headline 최대 20자, body 최대 60자.
-카드 ${cardCount} (마무리): 핵심 한 줄 요약 또는 CTA.
+2. 반직관성 원칙
+   - 독자가 이미 아는 내용이면 카드 낭비
+   - "운동이 건강에 좋다", "수면이 중요하다" 수준은 금지
+   - 원문에서 상식을 뒤집거나 의외성 있는 사실만 선택
 
-모든 텍스트 한국어. headline은 읽는 순간 멈춰야 함.
-각 카드 accent 색상 순서대로: ${accentList}
+3. 즉시 적용 원칙
+   - 독자가 카드를 보고 오늘 바로 실행할 수 있어야 함
+   - 방법론, 공식, 수치 기반의 실행 가능한 팁
 
-반드시 아래 JSON만 응답 (다른 텍스트 없이):
+4. 훅 원칙 (카드 1)
+   - 첫 카드는 독자가 스크롤을 멈추게 해야 함
+   - 원문에서 가장 충격적이거나 반직관적인 사실로 시작
+   - "당신이 틀렸다", "X가 X를 망친다", "X년째 잘못 알고 있는" 형식 활용
+
+5. 한 카드 = 한 메시지 원칙
+   - 여러 개념을 섞지 말 것
+   - 하나의 구체적 포인트를 깊게`;
+
+  const userPrompt = `[원문 — 영어면 핵심 번역해서 활용]
+${text.substring(0, 5000)}
+
+${topic ? `[추가 방향] ${topic}` : ''}
+
+위 원문으로 ${cardCount}장 카드뉴스 제작:
+- 카드 1: 가장 반직관적이거나 충격적인 사실로 훅
+- 카드 2~${Number(cardCount)-1}: 원문의 핵심 공식/수치/방법 각 1개씩 (뻔한 내용 금지)
+- 카드 ${cardCount}: 핵심 내용 한 줄 요약
+
+headline 최대 20자, body 최대 70자, 전체 한국어
+accent 색상 순서: ${accentList}
+
+JSON만 응답:
 {
   "seriesTitle": "시리즈 제목 (20자 이내)",
   "cards": [
@@ -89,7 +114,7 @@ ${topic ? `[추가 키워드/방향] ${topic}` : ''}
       "subheadline": "서브헤드라인 (없으면 빈 문자열)",
       "body": "본문",
       "accent": "#FF6B35",
-      "imagePrompt": "Abstract minimalist concept in English for DALL-E 3. Dark moody atmosphere, cinematic lighting, no text."
+      "imagePrompt": "Abstract minimalist visual concept in English for DALL-E 3. Dark moody cinematic, no text."
     }
   ]
 }`;
@@ -97,12 +122,14 @@ ${topic ? `[추가 키워드/방향] ${topic}` : ''}
   try {
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
-      max_tokens: 3500,
+      max_tokens: 4000,
       response_format: { type: 'json_object' },
-      messages: [{ role: 'user', content: prompt }]
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ]
     });
-    const raw = completion.choices[0].message.content;
-    res.json(JSON.parse(raw));
+    res.json(JSON.parse(completion.choices[0].message.content));
   } catch (e) {
     console.error('[generate]', e.message);
     res.status(500).json({ error: e.message });
@@ -119,7 +146,7 @@ app.post('/api/image', checkAdmin, async (req, res) => {
   try {
     const response = await openai.images.generate({
       model: 'dall-e-3',
-      prompt: `${prompt}. Ultra minimalist, dark moody cinematic, Apple aesthetic, professional photography. No text, no words, no letters anywhere.`,
+      prompt: `${prompt}. Ultra minimalist, dark moody cinematic, Apple aesthetic, professional photography. Absolutely no text, no words, no letters anywhere in the image.`,
       size: '1024x1024',
       quality: 'standard',
       n: 1,
