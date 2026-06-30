@@ -8,13 +8,11 @@ const multer    = require('multer');
 const path      = require('path');
 const https     = require('https');
 const http      = require('http');
-const Anthropic = require('@anthropic-ai/sdk');
-const OpenAI    = require('openai');
+const OpenAI = require('openai');
 
-const PORT          = process.env.PORT              || 3001;
-const ADMIN_KEY     = process.env.ADMIN_KEY         || 'cardnews2024';
-const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || '';
-const OPENAI_KEY    = process.env.OPENAI_API_KEY    || '';
+const PORT       = process.env.PORT            || 3001;
+const ADMIN_KEY  = process.env.ADMIN_KEY       || 'cardnews2024';
+const OPENAI_KEY = process.env.OPENAI_API_KEY  || '';
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -52,13 +50,13 @@ app.post('/api/extract', checkAdmin, upload.single('file'), async (req, res) => 
   }
 });
 
-// 카드뉴스 생성 (Claude)
+// 카드뉴스 생성 (GPT-4o)
 app.post('/api/generate', checkAdmin, async (req, res) => {
-  if (!ANTHROPIC_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY 환경변수 미설정' });
+  if (!OPENAI_KEY) return res.status(500).json({ error: 'OPENAI_API_KEY 환경변수 미설정' });
   const { text, cardCount = 7, topic = '' } = req.body;
   if (!text) return res.status(400).json({ error: '텍스트 필요' });
 
-  const anthropic = new Anthropic({ apiKey: ANTHROPIC_KEY });
+  const openai = new OpenAI({ apiKey: OPENAI_KEY });
   const ACCENTS = ['#FF6B35','#00D4FF','#A78BFA','#34D399','#FBBF24','#F472B6','#60A5FA','#F87171','#2DD4BF'];
   const accentList = ACCENTS.slice(0, Number(cardCount)).join(', ');
 
@@ -80,7 +78,7 @@ ${topic ? `[추가 키워드/방향] ${topic}` : ''}
 모든 텍스트 한국어. headline은 읽는 순간 멈춰야 함.
 각 카드 accent 색상 순서대로: ${accentList}
 
-[반드시 아래 JSON만 응답]
+반드시 아래 JSON만 응답 (다른 텍스트 없이):
 {
   "seriesTitle": "시리즈 제목 (20자 이내)",
   "cards": [
@@ -97,15 +95,14 @@ ${topic ? `[추가 키워드/방향] ${topic}` : ''}
 }`;
 
   try {
-    const msg = await anthropic.messages.create({
-      model: 'claude-opus-4-5',
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
       max_tokens: 3500,
+      response_format: { type: 'json_object' },
       messages: [{ role: 'user', content: prompt }]
     });
-    const raw = msg.content[0].text;
-    const match = raw.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error('카드 데이터 파싱 실패 — 다시 시도해주세요');
-    res.json(JSON.parse(match[0]));
+    const raw = completion.choices[0].message.content;
+    res.json(JSON.parse(raw));
   } catch (e) {
     console.error('[generate]', e.message);
     res.status(500).json({ error: e.message });
@@ -146,11 +143,10 @@ app.post('/api/image', checkAdmin, async (req, res) => {
 });
 
 app.get('/api/status', checkAdmin, (_req, res) => {
-  res.json({ anthropic: !!ANTHROPIC_KEY, openai: !!OPENAI_KEY });
+  res.json({ anthropic: !!OPENAI_KEY, openai: !!OPENAI_KEY });
 });
 
 app.listen(PORT, () => {
   console.log(`🎨 카드뉴스 공장 → http://localhost:${PORT}`);
-  console.log(`   Anthropic: ${ANTHROPIC_KEY ? '✓' : '✗ 미설정'}`);
-  console.log(`   OpenAI   : ${OPENAI_KEY    ? '✓' : '✗ 미설정'}`);
+  console.log(`   OpenAI: ${OPENAI_KEY ? '✓' : '✗ 미설정'}`);
 });
