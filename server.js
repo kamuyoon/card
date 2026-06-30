@@ -152,36 +152,24 @@ app.post('/api/image', checkAdmin, async (req, res) => {
 
   const openai = new OpenAI({ apiKey: OPENAI_KEY });
   try {
-    const response = await openai.images.generate({
-      model: 'dall-e-3',
-      prompt: `${prompt}. Ultra minimalist, dark moody cinematic, Apple aesthetic, professional photography. Absolutely no text, no words, no letters anywhere in the image.`,
-      size: '1024x1024',
-      quality: 'standard',
-      n: 1,
-    });
-    const imageUrl = response.data[0].url;
-    const imgBase64 = await new Promise((resolve, reject) => {
-      const parsed = new URL(imageUrl);
-      const lib = parsed.protocol === 'https:' ? https : http;
-      lib.get(imageUrl, (imgRes) => {
-        const chunks = [];
-        imgRes.on('data', c => chunks.push(c));
-        imgRes.on('end', () => resolve(Buffer.concat(chunks).toString('base64')));
-        imgRes.on('error', reject);
-      }).on('error', reject);
-    });
-    res.json({ imageData: `data:image/png;base64,${imgBase64}` });
-  } catch (e) {
-    console.error('[image]', e.message);
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.get('/api/status', checkAdmin, (_req, res) => {
-  res.json({ anthropic: !!OPENAI_KEY, openai: !!OPENAI_KEY });
-});
-
-app.listen(PORT, () => {
-  console.log(`🎨 카드뉴스 공장 → http://localhost:${PORT}`);
-  console.log(`   OpenAI: ${OPENAI_KEY ? '✓' : '✗ 미설정'}`);
-});
+    let imageUrl;
+    try {
+      const r3 = await openai.images.generate({
+        model: 'dall-e-3',
+        prompt: `${prompt}. Editorial photography style, cinematic moody lighting, dark atmosphere. Absolutely no text, no words, no letters anywhere in the image.`,
+        size: '1024x1024',
+        quality: 'standard',
+        n: 1,
+      });
+      imageUrl = r3.data[0].url;
+    } catch (e3) {
+      console.warn('[image] dall-e-3 failed, trying dall-e-2:', e3.message);
+      const r2 = await openai.images.generate({
+        model: 'dall-e-2',
+        prompt: `${prompt}. Cinematic moody lighting, dark atmosphere. No text.`,
+        size: '1024x1024',
+        n: 1,
+      });
+      imageUrl = r2.data[0].url;
+    }
+    const imgBase64 = await new Promise((resolve, r
